@@ -92,10 +92,10 @@ jobs:
     needs: plan
     runs-on: ${{ matrix.os }}
     # Concurrency at job level — `matrix` is only valid inside a job.
-    # One concurrent build per target triple; never cancel an in-flight build.
+    # Keep only the newest build for each target/ref while iterating CI.
     concurrency:
-      group: build-${{ matrix.target }}
-      cancel-in-progress: false
+      group: build-${{ github.workflow }}-${{ github.ref }}-${{ matrix.target }}
+      cancel-in-progress: true
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
