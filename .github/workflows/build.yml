@@ -9,9 +9,9 @@ name: build
 #   - workflow_dispatch:     manual / debug runs
 #
 # Releases (push to main only):
-#   Tag:    v<run_id>-<target>-<short_sha>
-#   Title:  ffmpeg sidecar <target> <run_id>
-#   Asset:  ffmpeg-<triple>[.exe]  (already named for Tauri's sidecar)
+#   Tag:    v<run_id>
+#   Title:  ffmpeg sidecars <run_id>
+#   Assets: all 3 ffmpeg-<triple>[.exe] files
 #
 # Artifacts (workflow_call only):
 #   Name:   ffmpeg-<triple>[.exe]
@@ -173,7 +173,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ffmpeg-src
-          key: ffmpeg-src-n7.1-${{ runner.os }}-${{ hashFiles('configure/**') }}
+          key: ffmpeg-src-n7.1-${{ matrix.target }}-${{ hashFiles('configure/**') }}
 
       - name: Clone ffmpeg source (Windows)
         if: matrix.target == 'windows-x86_64'
@@ -185,7 +185,7 @@ jobs:
             git clone --depth 1 --branch n7.1 https://github.com/ffmpeg/ffmpeg.git ffmpeg-src
           else
             echo "Using cached ffmpeg source"
-            (cd ffmpeg-src && git fetch --depth 1 origin n7.1 && git checkout FETCH_HEAD)
+            (cd ffmpeg-src && git fetch --depth 1 origin n7.1 && git checkout --force FETCH_HEAD && git clean -ffd)
           fi
 
       - name: Clone ffmpeg source (non-Windows)
@@ -198,7 +198,7 @@ jobs:
             git clone --depth 1 --branch n7.1 https://github.com/ffmpeg/ffmpeg.git ffmpeg-src
           else
             echo "Using cached ffmpeg source"
-            (cd ffmpeg-src && git fetch --depth 1 origin n7.1 && git checkout FETCH_HEAD)
+            (cd ffmpeg-src && git fetch --depth 1 origin n7.1 && git checkout --force FETCH_HEAD && git clean -ffd)
           fi
 
       - name: Configure (Windows)
@@ -207,6 +207,7 @@ jobs:
         working-directory: ffmpeg-src
         run: |
           set -euo pipefail
+          git clean -ffd
           bash ../${{ matrix.configure }}
           grep -q '^#define CONFIG_PCM_S16LE_MUXER 1$' config_components.h
 
@@ -216,6 +217,7 @@ jobs:
         working-directory: ffmpeg-src
         run: |
           set -euo pipefail
+          git clean -ffd
           bash ../${{ matrix.configure }}
           grep -q '^#define CONFIG_PCM_S16LE_MUXER 1$' config_components.h
 
@@ -301,13 +303,31 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Create GitHub Release (push to main only)
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Download sidecar artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: ffmpeg-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: List release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          find release-assets -maxdepth 1 -type f -print
+          test "$(find release-assets -maxdepth 1 -type f | wc -l)" -eq 3
+
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ github.run_id }}-${{ matrix.target }}
-          name: ffmpeg ${{ matrix.target }} (run ${{ github.run_id }})
+          tag_name: v${{ github.run_id }}
+          name: ffmpeg sidecars (run ${{ github.run_id }})
           generate_release_notes: false
-          files: |
-            stage/*
+          files: release-assets/*
           fail_on_unmatched_files: true

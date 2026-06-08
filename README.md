@@ -44,7 +44,7 @@ Linux is intentionally not supported — see the [echo-flow README](https://gith
 
 | Trigger | Effect |
 |---------|--------|
-| `push` to `main` | Build all 3 targets, push a GitHub Release per target |
+| `push` to `main` | Build all 3 targets, push one GitHub Release containing all sidecars |
 | `pull_request` | Build all 3 targets, run contract tests, do **not** push releases |
 | `workflow_dispatch` | Manual / debug runs |
 | `workflow_call` | Used by echo-flow's `tauri-build.yml` to fetch the artifact |
