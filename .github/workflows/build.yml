@@ -103,14 +103,14 @@ jobs:
     steps:
       - name: Checkout sidecar repo
         if: github.event_name == 'workflow_call'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: xzygh/ffmpeg-sidecar
           ref: ${{ inputs.source_ref }}
 
       - name: Checkout
         if: github.event_name != 'workflow_call'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup MSYS2 + mingw-w64 (Windows)
         if: matrix.target == 'windows-x86_64'
@@ -161,19 +161,19 @@ jobs:
           command -v ccache
           command -v nasm
 
+      - name: Prepare ccache directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ".cache/ccache/${{ matrix.target }}"
+
       - name: Cache ccache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
-          path: ${{ matrix.target == 'windows-x86_64' && 'C:\msys64\ccache' || '~/.ccache' }}
+          path: .cache/ccache/${{ matrix.target }}
           key: ccache-${{ matrix.target }}-${{ hashFiles(matrix.configure) }}
           restore-keys: |
             ccache-${{ matrix.target }}-
-
-      - name: Cache ffmpeg source
-        uses: actions/cache@v4
-        with:
-          path: ffmpeg-src
-          key: ffmpeg-src-n7.1-${{ matrix.target }}-${{ hashFiles('configure/**') }}
 
       - name: Clone ffmpeg source (Windows)
         if: matrix.target == 'windows-x86_64'
@@ -228,6 +228,7 @@ jobs:
         env:
           CC: "ccache x86_64-w64-mingw32-gcc"
           CXX: "ccache x86_64-w64-mingw32-g++"
+          CCACHE_DIR: "../.cache/ccache/${{ matrix.target }}"
         run: |
           set -euo pipefail
           make -j"$(nproc)" 2>&1 | tail -100
@@ -239,6 +240,7 @@ jobs:
         env:
           CC: "ccache cc"
           CXX: "ccache c++"
+          CCACHE_DIR: "../.cache/ccache/${{ matrix.target }}"
         run: |
           set -euo pipefail
           make -j"$(sysctl -n hw.ncpu)" 2>&1 | tail -100
@@ -296,7 +298,7 @@ jobs:
           ls -la stage/
 
       - name: Upload as workflow artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ffmpeg-${{ matrix.target }}
           path: stage/
@@ -310,7 +312,7 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - name: Download sidecar artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: ffmpeg-*
           path: release-assets
