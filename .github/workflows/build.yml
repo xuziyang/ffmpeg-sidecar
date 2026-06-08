@@ -1,0 +1,192 @@
+name: build
+
+# Builds the LGPL-only ffmpeg sidecar used by echo-flow.
+#
+# Triggers:
+#   - push to main:           build all 3 targets, push a release
+#   - workflow_call:         used by echo-flow's tauri-build.yml
+#                            to obtain the binary as a workflow artifact
+#   - workflow_dispatch:     manual / debug runs
+#
+# Releases (push to main only):
+#   Tag:    v<run_id>-<target>-<short_sha>
+#   Title:  ffmpeg sidecar <target> <run_id>
+#   Asset:  ffmpeg-<triple>[.exe]  (already named for Tauri's sidecar)
+#
+# Artifacts (workflow_call only):
+#   Name:   ffmpeg-<triple>[.exe]
+#   Path:   the renamed binary
+#
+# License invariant: --enable-gpl / --enable-nonfree are NEVER passed to
+# ./configure, and the verify-binary.sh contract test re-checks this and
+# fails the build if a GPL component slips in.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "configure/**"
+      - "scripts/**"
+      - ".github/workflows/build.yml"
+  pull_request:
+    paths:
+      - "configure/**"
+      - "scripts/**"
+      - ".github/workflows/build.yml"
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Target triple to build"
+        type: choice
+        required: true
+        options:
+          - windows-x86_64
+          - darwin-x86_64
+          - darwin-aarch64
+  workflow_call:
+    inputs:
+      target:
+        description: "Target triple to build (one of windows-x86_64, darwin-x86_64, darwin-aarch64)"
+        type: string
+        required: true
+
+permissions:
+  contents: write   # required to create releases
+  actions: read
+
+concurrency:
+  group: build-${{ inputs.target || matrix.target }}
+  cancel-in-progress: false  # ffmpeg builds are long; never cancel one
+
+jobs:
+  build:
+    name: ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: windows-x86_64
+            label: Windows x64
+            os: windows-latest
+            configure: configure/windows-x86_64.sh
+            binary_in_source: ffmpeg.exe
+          - target: darwin-x86_64
+            label: macOS Intel
+            os: macos-13
+            configure: configure/darwin-x86_64.sh
+            binary_in_source: ffmpeg
+          - target: darwin-aarch64
+            label: macOS Apple Silicon
+            os: macos-latest
+            configure: configure/darwin-aarch64.sh
+            binary_in_source: ffmpeg
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup MSYS2 + mingw-w64 (Windows)
+        if: matrix.target == 'windows-x86_64'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            git
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-nasm
+            mingw-w64-x86_64-pkg-config
+            mingw-w64-x86_64-diffutils
+            make
+            ccache
+
+      - name: Setup ccache (non-Windows)
+        if: matrix.target != 'windows-x86_64'
+        run: |
+          which ccache || (brew install ccache 2>/dev/null || sudo apt-get install -y ccache)
+
+      - name: Cache ccache
+        uses: actions/cache@v4
+        with:
+          path: ${{ matrix.target == 'windows-x86_64' && 'C:\msys64\ccache' || '~/.ccache' }}
+          key: ccache-${{ matrix.target }}-${{ hashFiles(matrix.configure) }}
+          restore-keys: |
+            ccache-${{ matrix.target }}-
+
+      - name: Cache ffmpeg source
+        shell: bash
+        run: |
+          mkdir -p ffmpeg-src
+          # Cache the cloned source via actions/cache on the .git dir.
+          echo "ffmpeg-src/.git" >> .gitignore_dummy || true
+        # The actual cache step:
+      - name: Clone ffmpeg source
+        shell: bash
+        run: |
+          if [ ! -f ffmpeg-src/configure ]; then
+            echo "Cloning ffmpeg n7.1..."
+            git clone --depth 1 --branch n7.1 https://github.com/ffmpeg/ffmpeg.git ffmpeg-src
+          else
+            echo "Using cached ffmpeg source"
+            (cd ffmpeg-src && git fetch --depth 1 origin n7.1 && git checkout FETCH_HEAD)
+          fi
+
+      - name: Configure
+        shell: bash
+        working-directory: ffmpeg-src
+        run: bash ../${{ matrix.configure }}
+
+      - name: Build (parallel make)
+        shell: bash
+        working-directory: ffmpeg-src
+        env:
+          # Use ccache for C/C++ compilation.
+          CC: ${{ matrix.target == 'windows-x86_64' && 'ccache x86_64-w64-mingw32-gcc' || 'ccache cc' }}
+          CXX: ${{ matrix.target == 'windows-x86_64' && 'ccache x86_64-w64-mingw32-g++' || 'ccache c++' }}
+        run: |
+          if [ "${{ matrix.target }}" = "windows-x86_64" ]; then
+            NPROC=$(nproc)
+          else
+            NPROC=$(sysctl -n hw.ncpu)
+          fi
+          make -j"$NPROC" 2>&1 | tail -100
+
+      - name: Strip binary
+        shell: bash
+        run: |
+          STRIP=${{ matrix.target == 'windows-x86_64' && 'x86_64-w64-mingw32-strip' || 'strip' }}
+          "$STRIP" -s "ffmpeg-src/${{ matrix.binary_in_source }}"
+
+      - name: Verify (license + transcode contract)
+        shell: bash
+        run: bash scripts/verify-binary.sh "ffmpeg-src/${{ matrix.binary_in_source }}"
+
+      - name: Stage for upload
+        shell: bash
+        run: |
+          mkdir -p stage
+          bash scripts/release-binary.sh \
+            "${{ matrix.target }}" \
+            "ffmpeg-src/${{ matrix.binary_in_source }}" \
+            stage
+          ls -la stage/
+
+      - name: Upload as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-${{ matrix.target }}
+          path: stage/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Create GitHub Release (push to main only)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ github.run_id }}-${{ matrix.target }}
+          name: ffmpeg ${{ matrix.target }} (run ${{ github.run_id }})
+          generate_release_notes: false
+          files: |
+            stage/*
+          fail_on_unmatched_files: true
