@@ -140,10 +140,26 @@ jobs:
           command -v strip
           command -v ccache
 
-      - name: Setup ccache (non-Windows)
+      - name: Setup build tools (non-Windows)
         if: matrix.target != 'windows-x86_64'
         run: |
-          which ccache || (brew install ccache 2>/dev/null || sudo apt-get install -y ccache)
+          set -euo pipefail
+          missing=()
+          command -v ccache >/dev/null || missing+=(ccache)
+          command -v nasm >/dev/null || missing+=(nasm)
+          if [ "${#missing[@]}" -gt 0 ]; then
+            brew install "${missing[@]}"
+          fi
+
+      - name: Check build tools (non-Windows)
+        if: matrix.target != 'windows-x86_64'
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v cc
+          command -v c++
+          command -v ccache
+          command -v nasm
 
       - name: Cache ccache
         uses: actions/cache@v4
