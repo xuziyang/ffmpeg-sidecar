@@ -45,6 +45,7 @@ Linux is intentionally not supported — see the [echo-flow README](https://gith
 | Trigger | Effect |
 |---------|--------|
 | `push` to `main` | Build all 3 targets and upload workflow artifacts |
+| `push` a `v*.*.*` tag | Build all 3 targets, validate the semver tag, and push one GitHub Release containing all sidecars |
 | `pull_request` | Build all 3 targets, run contract tests, do **not** push releases |
 | `workflow_dispatch` | Manual debug builds, or release builds when `target=all` and `release_version` is set |
 | `workflow_call` | Used by echo-flow's `tauri-build.yml` to fetch the artifact |
@@ -69,6 +70,17 @@ FFmpeg upstream version stays the same but this repository's configure
 whitelist, verification contract, CI tooling, or packaging changes. When the
 upstream FFmpeg version changes, reset the sidecar revision, for example
 `v7.2.1`.
+
+To publish a release from `main`, create and push a semantic tag:
+
+```bash
+git tag v7.1.1
+git push origin v7.1.1
+```
+
+You can also publish from the GitHub Actions UI by running
+`workflow_dispatch` with `target=all` and `release_version` set to the same
+semantic version.
 
 ## Consuming from echo-flow
 

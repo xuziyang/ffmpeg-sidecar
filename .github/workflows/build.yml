@@ -6,9 +6,10 @@ name: build
 #   - push to main:           build all 3 targets
 #   - workflow_call:         used by echo-flow's tauri-build.yml
 #                            to obtain the binary as a workflow artifact
-#   - workflow_dispatch:     manual / debug runs
+#   - push semver tag:       build all 3 targets, push a release
+#   - workflow_dispatch:     manual / debug runs, optional release
 #
-# Releases (workflow_dispatch only, target=all, release_version set):
+# Releases (push semver tag, or workflow_dispatch target=all with release_version):
 #   Tag:    v<ffmpeg-major>.<ffmpeg-minor>.<sidecar-revision>
 #   Title:  ffmpeg sidecars <version>
 #   Assets: all 3 ffmpeg-<triple>[.exe] files
@@ -24,6 +25,8 @@ name: build
 on:
   push:
     branches: [main]
+    tags:
+      - "v*.*.*"
     paths:
       - "configure/**"
       - "scripts/**"
@@ -71,11 +74,15 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.matrix.outputs.matrix }}
+      release_version: ${{ steps.matrix.outputs.release_version }}
     steps:
       - id: matrix
         shell: bash
         env:
           TARGET: ${{ inputs.target || 'all' }}
+          RELEASE_VERSION_INPUT: ${{ inputs.release_version || '' }}
+          REF_NAME: ${{ github.ref_name }}
+          REF_TYPE: ${{ github.ref_type }}
         run: |
           set -euo pipefail
           case "$TARGET" in
@@ -92,6 +99,14 @@ jobs:
               exit 1 ;;
           esac
           echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
+
+          RELEASE_VERSION=""
+          if [ "$REF_TYPE" = "tag" ]; then
+            RELEASE_VERSION="$REF_NAME"
+          elif [ "$TARGET" = "all" ] && [ -n "$RELEASE_VERSION_INPUT" ]; then
+            RELEASE_VERSION="$RELEASE_VERSION_INPUT"
+          fi
+          echo "release_version=$RELEASE_VERSION" >> "$GITHUB_OUTPUT"
 
   build:
     name: ${{ matrix.label }}
@@ -313,14 +328,14 @@ jobs:
 
   release:
     name: Create GitHub Release
-    needs: build
+    needs: [plan, build]
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' && inputs.target == 'all' && inputs.release_version != ''
+    if: needs.plan.outputs.release_version != ''
     steps:
       - name: Validate release version
         shell: bash
         env:
-          RELEASE_VERSION: ${{ inputs.release_version }}
+          RELEASE_VERSION: ${{ needs.plan.outputs.release_version }}
         run: |
           set -euo pipefail
           if ! [[ "$RELEASE_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
@@ -345,8 +360,8 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ inputs.release_version }}
-          name: ffmpeg sidecars ${{ inputs.release_version }}
+          tag_name: ${{ needs.plan.outputs.release_version }}
+          name: ffmpeg sidecars ${{ needs.plan.outputs.release_version }}
           generate_release_notes: false
           files: release-assets/*
           fail_on_unmatched_files: true
