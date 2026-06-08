@@ -74,13 +74,13 @@ jobs:
           set -euo pipefail
           case "$TARGET" in
             all)
-              MATRIX='{"include":[{"target":"windows-x86_64","label":"Windows x64","os":"windows-latest","configure":"configure/windows-x86_64.sh","binary_in_source":"ffmpeg.exe","shell":"msys2 {0}"},{"target":"darwin-x86_64","label":"macOS Intel","os":"macos-13","configure":"configure/darwin-x86_64.sh","binary_in_source":"ffmpeg","shell":"bash"},{"target":"darwin-aarch64","label":"macOS Apple Silicon","os":"macos-latest","configure":"configure/darwin-aarch64.sh","binary_in_source":"ffmpeg","shell":"bash"}]}' ;;
+              MATRIX='{"include":[{"target":"windows-x86_64","label":"Windows x64","os":"windows-latest","configure":"configure/windows-x86_64.sh","binary_in_source":"ffmpeg.exe"},{"target":"darwin-x86_64","label":"macOS Intel","os":"macos-13","configure":"configure/darwin-x86_64.sh","binary_in_source":"ffmpeg"},{"target":"darwin-aarch64","label":"macOS Apple Silicon","os":"macos-latest","configure":"configure/darwin-aarch64.sh","binary_in_source":"ffmpeg"}]}' ;;
             windows-x86_64)
-              MATRIX='{"include":[{"target":"windows-x86_64","label":"Windows x64","os":"windows-latest","configure":"configure/windows-x86_64.sh","binary_in_source":"ffmpeg.exe","shell":"msys2 {0}"}]}' ;;
+              MATRIX='{"include":[{"target":"windows-x86_64","label":"Windows x64","os":"windows-latest","configure":"configure/windows-x86_64.sh","binary_in_source":"ffmpeg.exe"}]}' ;;
             darwin-x86_64)
-              MATRIX='{"include":[{"target":"darwin-x86_64","label":"macOS Intel","os":"macos-13","configure":"configure/darwin-x86_64.sh","binary_in_source":"ffmpeg","shell":"bash"}]}' ;;
+              MATRIX='{"include":[{"target":"darwin-x86_64","label":"macOS Intel","os":"macos-13","configure":"configure/darwin-x86_64.sh","binary_in_source":"ffmpeg"}]}' ;;
             darwin-aarch64)
-              MATRIX='{"include":[{"target":"darwin-aarch64","label":"macOS Apple Silicon","os":"macos-latest","configure":"configure/darwin-aarch64.sh","binary_in_source":"ffmpeg","shell":"bash"}]}' ;;
+              MATRIX='{"include":[{"target":"darwin-aarch64","label":"macOS Apple Silicon","os":"macos-latest","configure":"configure/darwin-aarch64.sh","binary_in_source":"ffmpeg"}]}' ;;
             *)
               echo "Unsupported target: $TARGET" >&2
               exit 1 ;;
@@ -147,8 +147,9 @@ jobs:
           path: ffmpeg-src
           key: ffmpeg-src-n7.1-${{ runner.os }}
 
-      - name: Clone ffmpeg source
-        shell: ${{ matrix.shell }}
+      - name: Clone ffmpeg source (Windows)
+        if: matrix.target == 'windows-x86_64'
+        shell: msys2 {0}
         run: |
           set -euo pipefail
           if [ ! -f ffmpeg-src/configure ]; then
@@ -159,48 +160,100 @@ jobs:
             (cd ffmpeg-src && git fetch --depth 1 origin n7.1 && git checkout FETCH_HEAD)
           fi
 
-      - name: Configure
-        shell: ${{ matrix.shell }}
+      - name: Clone ffmpeg source (non-Windows)
+        if: matrix.target != 'windows-x86_64'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f ffmpeg-src/configure ]; then
+            echo "Cloning ffmpeg n7.1..."
+            git clone --depth 1 --branch n7.1 https://github.com/ffmpeg/ffmpeg.git ffmpeg-src
+          else
+            echo "Using cached ffmpeg source"
+            (cd ffmpeg-src && git fetch --depth 1 origin n7.1 && git checkout FETCH_HEAD)
+          fi
+
+      - name: Configure (Windows)
+        if: matrix.target == 'windows-x86_64'
+        shell: msys2 {0}
         working-directory: ffmpeg-src
         run: |
           set -euo pipefail
           bash ../${{ matrix.configure }}
 
-      - name: Build (parallel make)
-        shell: ${{ matrix.shell }}
+      - name: Configure (non-Windows)
+        if: matrix.target != 'windows-x86_64'
+        shell: bash
+        working-directory: ffmpeg-src
+        run: |
+          set -euo pipefail
+          bash ../${{ matrix.configure }}
+
+      - name: Build (parallel make, Windows)
+        if: matrix.target == 'windows-x86_64'
+        shell: msys2 {0}
         working-directory: ffmpeg-src
         env:
-          # Use ccache for C/C++ compilation.
-          CC: ${{ matrix.target == 'windows-x86_64' && 'ccache x86_64-w64-mingw32-gcc' || 'ccache cc' }}
-          CXX: ${{ matrix.target == 'windows-x86_64' && 'ccache x86_64-w64-mingw32-g++' || 'ccache c++' }}
+          CC: "ccache x86_64-w64-mingw32-gcc"
+          CXX: "ccache x86_64-w64-mingw32-g++"
         run: |
           set -euo pipefail
-          if [ "${{ matrix.target }}" = "windows-x86_64" ]; then
-            NPROC=$(nproc)
-          else
-            NPROC=$(sysctl -n hw.ncpu)
-          fi
-          make -j"$NPROC" 2>&1 | tail -100
+          make -j"$(nproc)" 2>&1 | tail -100
 
-      - name: Strip binary
-        shell: ${{ matrix.shell }}
+      - name: Build (parallel make, non-Windows)
+        if: matrix.target != 'windows-x86_64'
+        shell: bash
+        working-directory: ffmpeg-src
+        env:
+          CC: "ccache cc"
+          CXX: "ccache c++"
         run: |
           set -euo pipefail
-          if [ "${{ matrix.target }}" = "windows-x86_64" ]; then
-            STRIP="x86_64-w64-mingw32-strip"
-          else
-            STRIP="strip"
-          fi
-          "$STRIP" -s "ffmpeg-src/${{ matrix.binary_in_source }}"
+          make -j"$(sysctl -n hw.ncpu)" 2>&1 | tail -100
 
-      - name: Verify (license + transcode contract)
-        shell: ${{ matrix.shell }}
+      - name: Strip binary (Windows)
+        if: matrix.target == 'windows-x86_64'
+        shell: msys2 {0}
+        run: |
+          set -euo pipefail
+          x86_64-w64-mingw32-strip -s "ffmpeg-src/${{ matrix.binary_in_source }}"
+
+      - name: Strip binary (non-Windows)
+        if: matrix.target != 'windows-x86_64'
+        shell: bash
+        run: |
+          set -euo pipefail
+          strip -s "ffmpeg-src/${{ matrix.binary_in_source }}"
+
+      - name: Verify (license + transcode contract, Windows)
+        if: matrix.target == 'windows-x86_64'
+        shell: msys2 {0}
         run: |
           set -euo pipefail
           bash scripts/verify-binary.sh "ffmpeg-src/${{ matrix.binary_in_source }}"
 
-      - name: Stage for upload
-        shell: ${{ matrix.shell }}
+      - name: Verify (license + transcode contract, non-Windows)
+        if: matrix.target != 'windows-x86_64'
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/verify-binary.sh "ffmpeg-src/${{ matrix.binary_in_source }}"
+
+      - name: Stage for upload (Windows)
+        if: matrix.target == 'windows-x86_64'
+        shell: msys2 {0}
+        run: |
+          set -euo pipefail
+          mkdir -p stage
+          bash scripts/release-binary.sh \
+            "${{ matrix.target }}" \
+            "ffmpeg-src/${{ matrix.binary_in_source }}" \
+            stage
+          ls -la stage/
+
+      - name: Stage for upload (non-Windows)
+        if: matrix.target != 'windows-x86_64'
+        shell: bash
         run: |
           set -euo pipefail
           mkdir -p stage
