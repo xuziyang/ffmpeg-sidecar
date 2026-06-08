@@ -3,14 +3,14 @@ name: build
 # Builds the LGPL-only ffmpeg sidecar used by echo-flow.
 #
 # Triggers:
-#   - push to main:           build all 3 targets, push a release
+#   - push to main:           build all 3 targets
 #   - workflow_call:         used by echo-flow's tauri-build.yml
 #                            to obtain the binary as a workflow artifact
 #   - workflow_dispatch:     manual / debug runs
 #
-# Releases (push to main only):
-#   Tag:    v<run_id>
-#   Title:  ffmpeg sidecars <run_id>
+# Releases (workflow_dispatch only, target=all, release_version set):
+#   Tag:    v<ffmpeg-major>.<ffmpeg-minor>.<sidecar-revision>
+#   Title:  ffmpeg sidecars <version>
 #   Assets: all 3 ffmpeg-<triple>[.exe] files
 #
 # Artifacts (workflow_call only):
@@ -39,10 +39,16 @@ on:
         description: "Target triple to build"
         type: choice
         required: true
+        default: all
         options:
+          - all
           - windows-x86_64
           - darwin-x86_64
           - darwin-aarch64
+      release_version:
+        description: "Semantic release version, for example v7.1.1. Leave empty for a debug build."
+        type: string
+        required: false
   workflow_call:
     inputs:
       target:
@@ -309,8 +315,19 @@ jobs:
     name: Create GitHub Release
     needs: build
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_dispatch' && inputs.target == 'all' && inputs.release_version != ''
     steps:
+      - name: Validate release version
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ inputs.release_version }}
+        run: |
+          set -euo pipefail
+          if ! [[ "$RELEASE_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "release_version must look like v7.1.1" >&2
+            exit 1
+          fi
+
       - name: Download sidecar artifacts
         uses: actions/download-artifact@v8
         with:
@@ -328,8 +345,8 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ github.run_id }}
-          name: ffmpeg sidecars (run ${{ github.run_id }})
+          tag_name: ${{ inputs.release_version }}
+          name: ffmpeg sidecars ${{ inputs.release_version }}
           generate_release_notes: false
           files: release-assets/*
           fail_on_unmatched_files: true
