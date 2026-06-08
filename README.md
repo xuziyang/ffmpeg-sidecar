@@ -35,7 +35,7 @@ These filenames are exactly what `src-tauri/tauri.conf.json`'s
 | Target triple | Configure script | Runner |
 |---------------|------------------|--------|
 | `windows-x86_64` | `configure/windows-x86_64.sh` | `windows-latest` (mingw-w64 cross-compile) |
-| `darwin-x86_64`  | `configure/darwin-x86_64.sh`  | `macos-13` (Intel) |
+| `darwin-x86_64`  | `configure/darwin-x86_64.sh`  | `macos-15-intel` |
 | `darwin-aarch64` | `configure/darwin-aarch64.sh` | `macos-latest` (Apple Silicon) |
 
 Linux is intentionally not supported — see the [echo-flow README](https://github.com/xzygh/echo-flow).

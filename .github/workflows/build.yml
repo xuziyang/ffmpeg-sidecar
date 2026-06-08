@@ -74,11 +74,11 @@ jobs:
           set -euo pipefail
           case "$TARGET" in
             all)
-              MATRIX='{"include":[{"target":"windows-x86_64","label":"Windows x64","os":"windows-latest","configure":"configure/windows-x86_64.sh","binary_in_source":"ffmpeg.exe"},{"target":"darwin-x86_64","label":"macOS Intel","os":"macos-13","configure":"configure/darwin-x86_64.sh","binary_in_source":"ffmpeg"},{"target":"darwin-aarch64","label":"macOS Apple Silicon","os":"macos-latest","configure":"configure/darwin-aarch64.sh","binary_in_source":"ffmpeg"}]}' ;;
+              MATRIX='{"include":[{"target":"windows-x86_64","label":"Windows x64","os":"windows-latest","configure":"configure/windows-x86_64.sh","binary_in_source":"ffmpeg.exe"},{"target":"darwin-x86_64","label":"macOS Intel","os":"macos-15-intel","configure":"configure/darwin-x86_64.sh","binary_in_source":"ffmpeg"},{"target":"darwin-aarch64","label":"macOS Apple Silicon","os":"macos-latest","configure":"configure/darwin-aarch64.sh","binary_in_source":"ffmpeg"}]}' ;;
             windows-x86_64)
               MATRIX='{"include":[{"target":"windows-x86_64","label":"Windows x64","os":"windows-latest","configure":"configure/windows-x86_64.sh","binary_in_source":"ffmpeg.exe"}]}' ;;
             darwin-x86_64)
-              MATRIX='{"include":[{"target":"darwin-x86_64","label":"macOS Intel","os":"macos-13","configure":"configure/darwin-x86_64.sh","binary_in_source":"ffmpeg"}]}' ;;
+              MATRIX='{"include":[{"target":"darwin-x86_64","label":"macOS Intel","os":"macos-15-intel","configure":"configure/darwin-x86_64.sh","binary_in_source":"ffmpeg"}]}' ;;
             darwin-aarch64)
               MATRIX='{"include":[{"target":"darwin-aarch64","label":"macOS Apple Silicon","os":"macos-latest","configure":"configure/darwin-aarch64.sh","binary_in_source":"ffmpeg"}]}' ;;
             *)
