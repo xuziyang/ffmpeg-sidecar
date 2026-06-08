@@ -14,11 +14,11 @@
 ENABLE_DECODERS="aac,ac3,alac,flac,mp3,mp3float,opus,pcm_s16le,pcm_s16be,pcm_f32le,pcm_f32be,vorbis"
 
 # Container demuxers.
-ENABLE_DEMUXERS="aac,flac,matroska,mov,mp3,m4a,ogg,wav"
+ENABLE_DEMUXERS="aac,flac,matroska,mov,mp3,ogg,wav"
 
 # IO protocols. `file` is the only one echo-flow uses, but `data` is
 # useful for synthetic test inputs and is LGPL.
-ENABLE_PROTOCOLS="file,data"
+ENABLE_PROTOCOLS="file,data,pipe"
 
 # Filters required for the transcode pipeline in
 # src-tauri/src/transcribe/audio.rs (16kHz mono s16le PCM output).
@@ -28,10 +28,13 @@ ENABLE_PROTOCOLS="file,data"
 #  - anull:     pass-through (sometimes injected by ffmpeg)
 #  - format:    pixel/format negotiation
 #  - abuffer, abuffersink: filter graph plumbing
-ENABLE_FILTERS="aresample,pan,aformat,anull,format,abuffer,abuffersink"
+ENABLE_FILTERS="aresample,pan,aformat,anull,format,abuffer,abuffersink,sine"
 
 # Only one encoder is needed: s16le PCM on stdout.
 ENABLE_ENCODERS="pcm_s16le"
 
-# Muxers: `null` is sufficient because we pipe to stdout.
-ENABLE_MUXERS="null"
+# Input devices used by the verifier to synthesize a tiny audio sample.
+ENABLE_INDEVS="lavfi"
+
+# Muxers: `s16le` is the sidecar output format; `wav` is used by the verifier.
+ENABLE_MUXERS="s16le,wav,null"

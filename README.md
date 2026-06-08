@@ -80,13 +80,14 @@ The build configuration in `configure/common.sh` is the authoritative
 whitelist. Adding a component to that file is a legal decision, not just a
 technical one — please open an issue first if you want to extend it.
 
-The contract test in `scripts/verify-binary.sh` enforces two invariants:
+The contract test in `scripts/verify-binary.sh` enforces these invariants:
 
-1. The `configuration` line printed by `ffmpeg -version` contains
-   `--enable-lgpl` and does **not** contain `--enable-gpl` or
-   `--enable-nonfree`.
+1. The `configuration` line printed by `ffmpeg -version` does **not**
+   contain `--enable-gpl`, `--enable-nonfree`, or `--enable-version3`.
 2. A hard-coded list of GPL-only component names (x264, x265, fdk-aac,
    arib24, libssh, libbluray, ...) does not appear in the configuration.
+3. The binary can execute echo-flow's decode/resample pipeline and exposes
+   the required decoders, demuxers, muxers, and protocols.
 
 If you intentionally need a GPL component, the right answer is to fork
 this repo — do not weaken the contract test.

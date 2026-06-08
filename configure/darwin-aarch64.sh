@@ -16,7 +16,6 @@ source "$(dirname "$0")/common.sh"
   --pkg-config=pkg-config \
   --arch=aarch64 \
   --target-os=darwin \
-  --enable-version3 \
   --enable-runtime-cpudetect \
   --disable-debug \
   --disable-shared \
@@ -30,6 +29,7 @@ source "$(dirname "$0")/common.sh"
   --enable-decoder=$ENABLE_DECODERS \
   --enable-demuxer=$ENABLE_DEMUXERS \
   --enable-protocol=$ENABLE_PROTOCOLS \
+  --enable-indev=$ENABLE_INDEVS \
   --enable-filter=$ENABLE_FILTERS \
   --enable-encoder=$ENABLE_ENCODERS \
   --enable-muxer=$ENABLE_MUXERS \

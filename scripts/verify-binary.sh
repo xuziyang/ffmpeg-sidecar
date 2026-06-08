@@ -37,19 +37,16 @@ fi
 echo "$CONFIG" | head -c 200
 echo "..."
 
-# The build's --enable-lgpl / --disable-gpl / --disable-nonfree flags should
-# be visible in the configuration line.
-if ! echo "$CONFIG" | grep -q -- "--enable-lgpl"; then
-  echo >&2
-  echo "FAIL: --enable-lgpl not present in ffmpeg configuration." >&2
-  echo "      This build is not legally LGPL." >&2
-  exit 1
-fi
-
 if echo "$CONFIG" | grep -Eq -- "--enable-gpl|--enable-nonfree"; then
   echo >&2
   echo "FAIL: ffmpeg configuration has GPL or nonfree flags enabled:" >&2
   echo "$CONFIG" | grep -Eo -- "--enable-(gpl|nonfree)[^ ]*" >&2
+  exit 1
+fi
+
+if echo "$CONFIG" | grep -q -- "--enable-version3"; then
+  echo >&2
+  echo "FAIL: --enable-version3 is present; this build is not LGPL 2.1+." >&2
   exit 1
 fi
 
@@ -146,6 +143,16 @@ for REQUIRED_DEMUXER in "mov,mp4,m4a" "matroska" "mp3" "ogg" "wav"; do
   fi
 done
 
-echo "  decoders/demuxers: all required components present ✓"
+if ! "$BIN" -hide_banner -muxers 2>&1 | grep -q " s16le "; then
+  echo "FAIL: required muxer 's16le' is missing." >&2
+  exit 1
+fi
+
+if ! "$BIN" -hide_banner -protocols 2>&1 | grep -q "^  pipe$"; then
+  echo "FAIL: required protocol 'pipe' is missing." >&2
+  exit 1
+fi
+
+echo "  decoders/demuxers/muxers/protocols: all required components present ✓"
 echo
 echo "==> Sidecar contract test PASSED"

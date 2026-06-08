@@ -20,7 +20,6 @@ source "$(dirname "$0")/common.sh"
   --arch=x86_64 \
   --target-os=mingw32 \
   --enable-cross-compile \
-  --enable-version3 \
   --enable-runtime-cpudetect \
   --disable-debug \
   --disable-w32threads \
@@ -35,6 +34,7 @@ source "$(dirname "$0")/common.sh"
   --enable-decoder=$ENABLE_DECODERS \
   --enable-demuxer=$ENABLE_DEMUXERS \
   --enable-protocol=$ENABLE_PROTOCOLS \
+  --enable-indev=$ENABLE_INDEVS \
   --enable-filter=$ENABLE_FILTERS \
   --enable-encoder=$ENABLE_ENCODERS \
   --enable-muxer=$ENABLE_MUXERS \

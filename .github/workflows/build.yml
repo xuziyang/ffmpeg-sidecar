@@ -49,14 +49,47 @@ on:
         description: "Target triple to build (one of windows-x86_64, darwin-x86_64, darwin-aarch64)"
         type: string
         required: true
+      source_ref:
+        description: "Ref of xzygh/ffmpeg-sidecar to check out when called from another repo"
+        type: string
+        required: false
+        default: main
 
 permissions:
   contents: write   # required to create releases
   actions: read
 
 jobs:
+  plan:
+    name: Plan build matrix
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - id: matrix
+        shell: bash
+        env:
+          TARGET: ${{ inputs.target || 'all' }}
+        run: |
+          set -euo pipefail
+          case "$TARGET" in
+            all)
+              MATRIX='{"include":[{"target":"windows-x86_64","label":"Windows x64","os":"windows-latest","configure":"configure/windows-x86_64.sh","binary_in_source":"ffmpeg.exe","shell":"msys2 {0}"},{"target":"darwin-x86_64","label":"macOS Intel","os":"macos-13","configure":"configure/darwin-x86_64.sh","binary_in_source":"ffmpeg","shell":"bash"},{"target":"darwin-aarch64","label":"macOS Apple Silicon","os":"macos-latest","configure":"configure/darwin-aarch64.sh","binary_in_source":"ffmpeg","shell":"bash"}]}' ;;
+            windows-x86_64)
+              MATRIX='{"include":[{"target":"windows-x86_64","label":"Windows x64","os":"windows-latest","configure":"configure/windows-x86_64.sh","binary_in_source":"ffmpeg.exe","shell":"msys2 {0}"}]}' ;;
+            darwin-x86_64)
+              MATRIX='{"include":[{"target":"darwin-x86_64","label":"macOS Intel","os":"macos-13","configure":"configure/darwin-x86_64.sh","binary_in_source":"ffmpeg","shell":"bash"}]}' ;;
+            darwin-aarch64)
+              MATRIX='{"include":[{"target":"darwin-aarch64","label":"macOS Apple Silicon","os":"macos-latest","configure":"configure/darwin-aarch64.sh","binary_in_source":"ffmpeg","shell":"bash"}]}' ;;
+            *)
+              echo "Unsupported target: $TARGET" >&2
+              exit 1 ;;
+          esac
+          echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
+
   build:
     name: ${{ matrix.label }}
+    needs: plan
     runs-on: ${{ matrix.os }}
     # Concurrency at job level — `matrix` is only valid inside a job.
     # One concurrent build per target triple; never cancel an in-flight build.
@@ -65,26 +98,18 @@ jobs:
       cancel-in-progress: false
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - target: windows-x86_64
-            label: Windows x64
-            os: windows-latest
-            configure: configure/windows-x86_64.sh
-            binary_in_source: ffmpeg.exe
-          - target: darwin-x86_64
-            label: macOS Intel
-            os: macos-13
-            configure: configure/darwin-x86_64.sh
-            binary_in_source: ffmpeg
-          - target: darwin-aarch64
-            label: macOS Apple Silicon
-            os: macos-latest
-            configure: configure/darwin-aarch64.sh
-            binary_in_source: ffmpeg
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
 
     steps:
+      - name: Checkout sidecar repo
+        if: github.event_name == 'workflow_call'
+        uses: actions/checkout@v4
+        with:
+          repository: xzygh/ffmpeg-sidecar
+          ref: ${{ inputs.source_ref }}
+
       - name: Checkout
+        if: github.event_name != 'workflow_call'
         uses: actions/checkout@v4
 
       - name: Setup MSYS2 + mingw-w64 (Windows)
@@ -99,7 +124,7 @@ jobs:
             mingw-w64-x86_64-toolchain
             mingw-w64-x86_64-nasm
             mingw-w64-x86_64-pkg-config
-            mingw-w64-x86_64-diffutils
+            diffutils
             make
             ccache
 
@@ -117,15 +142,15 @@ jobs:
             ccache-${{ matrix.target }}-
 
       - name: Cache ffmpeg source
-        shell: bash
-        run: |
-          mkdir -p ffmpeg-src
-          # Cache the cloned source via actions/cache on the .git dir.
-          echo "ffmpeg-src/.git" >> .gitignore_dummy || true
-        # The actual cache step:
+        uses: actions/cache@v4
+        with:
+          path: ffmpeg-src
+          key: ffmpeg-src-n7.1-${{ runner.os }}
+
       - name: Clone ffmpeg source
-        shell: bash
+        shell: ${{ matrix.shell }}
         run: |
+          set -euo pipefail
           if [ ! -f ffmpeg-src/configure ]; then
             echo "Cloning ffmpeg n7.1..."
             git clone --depth 1 --branch n7.1 https://github.com/ffmpeg/ffmpeg.git ffmpeg-src
@@ -135,18 +160,21 @@ jobs:
           fi
 
       - name: Configure
-        shell: bash
+        shell: ${{ matrix.shell }}
         working-directory: ffmpeg-src
-        run: bash ../${{ matrix.configure }}
+        run: |
+          set -euo pipefail
+          bash ../${{ matrix.configure }}
 
       - name: Build (parallel make)
-        shell: bash
+        shell: ${{ matrix.shell }}
         working-directory: ffmpeg-src
         env:
           # Use ccache for C/C++ compilation.
           CC: ${{ matrix.target == 'windows-x86_64' && 'ccache x86_64-w64-mingw32-gcc' || 'ccache cc' }}
           CXX: ${{ matrix.target == 'windows-x86_64' && 'ccache x86_64-w64-mingw32-g++' || 'ccache c++' }}
         run: |
+          set -euo pipefail
           if [ "${{ matrix.target }}" = "windows-x86_64" ]; then
             NPROC=$(nproc)
           else
@@ -155,8 +183,9 @@ jobs:
           make -j"$NPROC" 2>&1 | tail -100
 
       - name: Strip binary
-        shell: bash
+        shell: ${{ matrix.shell }}
         run: |
+          set -euo pipefail
           if [ "${{ matrix.target }}" = "windows-x86_64" ]; then
             STRIP="x86_64-w64-mingw32-strip"
           else
@@ -165,12 +194,15 @@ jobs:
           "$STRIP" -s "ffmpeg-src/${{ matrix.binary_in_source }}"
 
       - name: Verify (license + transcode contract)
-        shell: bash
-        run: bash scripts/verify-binary.sh "ffmpeg-src/${{ matrix.binary_in_source }}"
+        shell: ${{ matrix.shell }}
+        run: |
+          set -euo pipefail
+          bash scripts/verify-binary.sh "ffmpeg-src/${{ matrix.binary_in_source }}"
 
       - name: Stage for upload
-        shell: bash
+        shell: ${{ matrix.shell }}
         run: |
+          set -euo pipefail
           mkdir -p stage
           bash scripts/release-binary.sh \
             "${{ matrix.target }}" \
