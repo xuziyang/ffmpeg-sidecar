@@ -135,8 +135,9 @@ jobs:
         run: |
           set -euo pipefail
           command -v x86_64-w64-mingw32-gcc
-          command -v x86_64-w64-mingw32-ar
-          command -v x86_64-w64-mingw32-strip
+          command -v ar
+          command -v ranlib
+          command -v strip
           command -v ccache
 
       - name: Setup ccache (non-Windows)
@@ -227,7 +228,7 @@ jobs:
         shell: msys2 {0}
         run: |
           set -euo pipefail
-          x86_64-w64-mingw32-strip -s "ffmpeg-src/${{ matrix.binary_in_source }}"
+          strip -s "ffmpeg-src/${{ matrix.binary_in_source }}"
 
       - name: Strip binary (non-Windows)
         if: matrix.target != 'windows-x86_64'

@@ -51,16 +51,17 @@ if echo "$CONFIG" | grep -q -- "--enable-version3"; then
 fi
 
 # Belt-and-suspenders: ensure no GPL-only decoder/demuxer/filter/encoder
-# got enabled by accident. We maintain this list in lockstep with the
-# whitelist in configure/common.sh — if you add a new GPL-only component
-# there, add it here too.
+# got enabled by accident. Only scan enabled configure flags so explicit
+# disables like --disable-libxcb do not trigger false positives.
+ENABLED_CONFIG=$(echo "$CONFIG" | tr ' ' '\n' | grep -E '^--enable-' || true)
+
 for GPL_COMPONENT in \
   "libx264" "libx265" "libxavs" "libxavs2" "libxvid" \
   "libfdk-aac" "libfaac" "libaacplus" \
   "libaribcaption" "libarib24" "libdavs2" "libdvdread" "libdvdnav" \
   "libbluray" "libssh" "librtmp" "librtmpte" "librubberband" \
   "vid.stab" "libvidstab" "libdrm" "libxcb"; do
-  if echo "$CONFIG" | grep -q -- "$GPL_COMPONENT"; then
+  if echo "$ENABLED_CONFIG" | grep -q -- "$GPL_COMPONENT"; then
     echo "FAIL: GPL-only component '$GPL_COMPONENT' is enabled in this build." >&2
     exit 1
   fi

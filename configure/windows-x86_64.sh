@@ -17,6 +17,9 @@ source "$(dirname "$0")/common.sh"
   --pkg-config-flags=--static \
   --pkg-config=pkg-config \
   --cross-prefix=x86_64-w64-mingw32- \
+  --ar=ar \
+  --ranlib=ranlib \
+  --strip=strip \
   --arch=x86_64 \
   --target-os=mingw32 \
   --enable-cross-compile \
