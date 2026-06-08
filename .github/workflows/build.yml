@@ -54,14 +54,15 @@ permissions:
   contents: write   # required to create releases
   actions: read
 
-concurrency:
-  group: build-${{ inputs.target || matrix.target }}
-  cancel-in-progress: false  # ffmpeg builds are long; never cancel one
-
 jobs:
   build:
     name: ${{ matrix.label }}
     runs-on: ${{ matrix.os }}
+    # Concurrency at job level — `matrix` is only valid inside a job.
+    # One concurrent build per target triple; never cancel an in-flight build.
+    concurrency:
+      group: build-${{ matrix.target }}
+      cancel-in-progress: false
     strategy:
       fail-fast: false
       matrix:
