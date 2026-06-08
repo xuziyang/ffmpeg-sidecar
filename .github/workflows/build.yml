@@ -157,7 +157,11 @@ jobs:
       - name: Strip binary
         shell: bash
         run: |
-          STRIP=${{ matrix.target == 'windows-x86_64' && 'x86_64-w64-mingw32-strip' || 'strip' }}
+          if [ "${{ matrix.target }}" = "windows-x86_64" ]; then
+            STRIP="x86_64-w64-mingw32-strip"
+          else
+            STRIP="strip"
+          fi
           "$STRIP" -s "ffmpeg-src/${{ matrix.binary_in_source }}"
 
       - name: Verify (license + transcode contract)
