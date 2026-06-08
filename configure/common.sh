@@ -36,5 +36,6 @@ ENABLE_ENCODERS="pcm_s16le"
 # Input devices used by the verifier to synthesize a tiny audio sample.
 ENABLE_INDEVS="lavfi"
 
-# Muxers: `s16le` is the sidecar output format; `wav` is used by the verifier.
-ENABLE_MUXERS="s16le,wav,null"
+# Muxers: `pcm_s16le` exposes the CLI output format `-f s16le`;
+# `wav` is used by the verifier.
+ENABLE_MUXERS="pcm_s16le,wav,null"

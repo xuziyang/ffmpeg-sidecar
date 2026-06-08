@@ -157,7 +157,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ffmpeg-src
-          key: ffmpeg-src-n7.1-${{ runner.os }}
+          key: ffmpeg-src-n7.1-${{ runner.os }}-${{ hashFiles('configure/**') }}
 
       - name: Clone ffmpeg source (Windows)
         if: matrix.target == 'windows-x86_64'
@@ -192,6 +192,7 @@ jobs:
         run: |
           set -euo pipefail
           bash ../${{ matrix.configure }}
+          grep -q '^#define CONFIG_PCM_S16LE_MUXER 1$' config_components.h
 
       - name: Configure (non-Windows)
         if: matrix.target != 'windows-x86_64'
@@ -200,6 +201,7 @@ jobs:
         run: |
           set -euo pipefail
           bash ../${{ matrix.configure }}
+          grep -q '^#define CONFIG_PCM_S16LE_MUXER 1$' config_components.h
 
       - name: Build (parallel make, Windows)
         if: matrix.target == 'windows-x86_64'
