@@ -121,12 +121,23 @@ jobs:
           install: >-
             git
             base-devel
+            mingw-w64-x86_64-binutils
             mingw-w64-x86_64-toolchain
             mingw-w64-x86_64-nasm
             mingw-w64-x86_64-pkg-config
             diffutils
             make
             ccache
+
+      - name: Check Windows toolchain
+        if: matrix.target == 'windows-x86_64'
+        shell: msys2 {0}
+        run: |
+          set -euo pipefail
+          command -v x86_64-w64-mingw32-gcc
+          command -v x86_64-w64-mingw32-ar
+          command -v x86_64-w64-mingw32-strip
+          command -v ccache
 
       - name: Setup ccache (non-Windows)
         if: matrix.target != 'windows-x86_64'
@@ -223,7 +234,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          strip -s "ffmpeg-src/${{ matrix.binary_in_source }}"
+          strip -x "ffmpeg-src/${{ matrix.binary_in_source }}"
 
       - name: Verify (license + transcode contract, Windows)
         if: matrix.target == 'windows-x86_64'
