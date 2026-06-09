@@ -24,12 +24,19 @@ source "$(dirname "$0")/common.sh"
   --target-os=mingw32 \
   --enable-cross-compile \
   --enable-runtime-cpudetect \
+  --disable-autodetect \
   --disable-debug \
-  --disable-w32threads \
+  --disable-pthreads \
+  --enable-w32threads \
   --disable-shared \
   --enable-static \
+  --extra-ldflags="-static -static-libgcc" \
+  --disable-bzlib \
   --disable-doc \
+  --disable-iconv \
+  --disable-lzma \
   --disable-sdl2 \
+  --disable-zlib \
   --disable-xlib \
   --disable-libxcb \
   --disable-libpulse \

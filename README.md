@@ -122,6 +122,10 @@ The contract test in `scripts/verify-binary.sh` enforces these invariants:
 3. The binary can execute echo-flow's decode/resample pipeline and exposes
    the required decoders, demuxers, muxers, and protocols.
 
+For Windows, `scripts/verify-windows-imports.sh` also checks the PE import
+table and fails the build if the sidecar imports non-system DLLs such as
+`libwinpthread-1.dll`, `zlib1.dll`, `libbz2-1.dll`, or `libiconv-2.dll`.
+
 If you intentionally need a GPL component, the right answer is to fork
 this repo — do not weaken the contract test.
 

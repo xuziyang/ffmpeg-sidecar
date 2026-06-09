@@ -273,6 +273,13 @@ jobs:
           set -euo pipefail
           strip -s "ffmpeg-src/${{ matrix.binary_in_source }}"
 
+      - name: Verify Windows DLL imports
+        if: matrix.target == 'windows-x86_64'
+        shell: msys2 {0}
+        run: |
+          set -euo pipefail
+          bash scripts/verify-windows-imports.sh "ffmpeg-src/${{ matrix.binary_in_source }}"
+
       - name: Strip binary (non-Windows)
         if: matrix.target != 'windows-x86_64'
         shell: bash
